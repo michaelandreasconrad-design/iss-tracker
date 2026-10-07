@@ -53,15 +53,20 @@ function bearing(props) {
 
 // Fahrende Schiffe: Pfeil in Fahrtrichtung. Stehende Schiffe: Punkt ohne Richtung.
 // Es fließen nur geprüfte Zahlen in das Markup ein, keine Texte aus der API.
+// Die Drehung wird per DOM gesetzt, nicht als style-Attribut im Markup: Die CSP erlaubt kein Inline-Style
+// im HTML (style-src ohne 'unsafe-inline'), Zuweisungen über element.style sind dagegen erlaubt.
 export function shipIcon(props) {
-  const shape = isMoving(props)
-    ? `<svg viewBox="0 0 20 20" width="18" height="18" style="transform:rotate(${Math.round(
-        bearing(props)
-      )}deg)"><path d="M10 1 L17 18 L10 14 L3 18 Z"/></svg>`
-    : '<svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="6"/></svg>';
+  const root = document.createElement('div');
+  if (isMoving(props)) {
+    root.innerHTML =
+      '<svg viewBox="0 0 20 20" width="18" height="18"><path d="M10 1 L17 18 L10 14 L3 18 Z"/></svg>';
+    root.firstChild.style.transform = `rotate(${Math.round(bearing(props))}deg)`;
+  } else {
+    root.innerHTML = '<svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="6"/></svg>';
+  }
   return L.divIcon({
     className: 'ship-marker',
-    html: shape,
+    html: root.firstChild,
     iconSize: [18, 18],
     iconAnchor: [9, 9],
   });

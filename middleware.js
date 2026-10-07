@@ -4,14 +4,15 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 // Content Security Policy mit Nonce pro Anfrage: Skripte laufen nur, wenn sie das Nonce tragen
 // (Next.js-Hydration und das Theme-Skript im Layout). Dadurch ist kein 'unsafe-inline' für Skripte nötig.
-// - style-src 'unsafe-inline': Leaflet setzt Inline-Styles per JavaScript, die sich nicht mit Nonce versehen lassen.
+// - style-src 'self': Kein 'unsafe-inline'. Leaflet setzt Styles per JavaScript über element.style, das die CSP
+//   nicht blockiert. Im HTML-Markup (z. B. innerHTML) darf deshalb kein style-Attribut stehen.
 // - img-src: OpenStreetMap-Kacheln und Esri-Satellitenbilder.
 // - connect-src: ISS-Positions-API und Schiffsdaten (Digitraffic); im Dev-Modus zusätzlich WebSocket für Hot Reload.
 function buildCsp(nonce) {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
     "img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com",
     `connect-src 'self' https://api.wheretheiss.at https://meri.digitraffic.fi${isDev ? ' ws: wss:' : ''}`,
     "font-src 'self'",
