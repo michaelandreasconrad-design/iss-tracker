@@ -10,6 +10,7 @@ hawk:
     ajax: true
     seedPaths:
       - /api/astros
+      - /api/ships?south=50&west=0&north=60&east=10
 
 tags:
   - name: _STACKHAWK_AGENT
