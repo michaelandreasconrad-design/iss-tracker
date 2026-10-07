@@ -92,6 +92,18 @@ test('normalizeMessage: Sog „nicht verfügbar" (102.3) wird null, ungültige K
   assert.equal(normalizeMessage(position({ UserID: 0 })), null);
 });
 
+test('normalizeMessage: Latitude null wird verworfen (nicht als 0 gewertet)', () => {
+  assert.equal(normalizeMessage(position({ Latitude: null })), null);
+});
+
+test('normalizeMessage: Longitude null wird verworfen (nicht als 0 gewertet)', () => {
+  assert.equal(normalizeMessage(position({ Longitude: null })), null);
+});
+
+test('normalizeMessage: Koordinate als String ("54.1") wird bewusst verworfen, nur echte Zahlen zählen', () => {
+  assert.equal(normalizeMessage(position({ Latitude: '54.1' })), null);
+});
+
 test('normalizeMessage: Klasse-B-Meldung und Stammdaten', () => {
   const b = {
     MessageType: 'StandardClassBPositionReport',

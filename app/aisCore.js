@@ -104,8 +104,12 @@ export function normalizeMessage(msg) {
     const body = msg.Message[type];
     if (!body || typeof body !== 'object') return null;
     const sog = numberOrNull(body.Sog);
+    // Nur echte Zahlen akzeptieren: Number(null) wäre 0 und würde als gültige Position durchgehen.
+    const lon = numberOrNull(body.Longitude);
+    const lat = numberOrNull(body.Latitude);
+    if (lon === null || lat === null) return null;
     const feature = {
-      geometry: { coordinates: [Number(body.Longitude), Number(body.Latitude)] },
+      geometry: { coordinates: [lon, lat] },
       properties: {
         mmsi: Number(body.UserID ?? meta.MMSI),
         sog: sog !== null && sog >= SOG_NOT_AVAILABLE ? null : sog,

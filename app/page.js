@@ -144,7 +144,7 @@ export default function Home() {
             checked={showShips}
             onChange={(e) => changeShowShips(e.target.checked)}
           />
-          Schiffe anzeigen (Ostsee)
+          Schiffe anzeigen
         </label>
       </div>
 

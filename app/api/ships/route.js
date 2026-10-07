@@ -17,6 +17,7 @@ const RATE_WINDOW_MS = 60000;
 const cache = new Map(); // Ausschnitt -> { at, promise }
 const hits = new Map(); // Client -> Zeitstempel der letzten Anfragen
 
+// Ohne x-forwarded-for teilen sich alle Anfragen einen Bucket 'unknown' (Vercel setzt den Header immer; ohne Proxy gilt ein gemeinsames, strengeres Limit).
 function clientId(request) {
   const forwarded = request.headers.get('x-forwarded-for');
   return forwarded?.split(',')[0].trim() || 'unknown';
@@ -106,6 +107,7 @@ export async function GET(request) {
   if (!entry || now - entry.at > CACHE_TTL_MS) {
     const current = { at: now, promise: collect(snapped, apiKey) };
     entry = current;
+    cache.delete(key); // abgelaufenen Eintrag ans Ende der Einfügereihenfolge verschieben
     cache.set(key, current);
     // Fehlschläge nicht zwischenspeichern.
     current.promise.catch(() => {

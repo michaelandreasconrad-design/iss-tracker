@@ -379,12 +379,15 @@ test('collect: close -> 502', async () => {
 
     const resPromise = call('south=51.5&west=1.5&north=58.5&east=8.5', '10.0.3.6');
 
-    mock.timers.tick(0); // Allow onopen
-    if (wsInstance?.onclose) {
-      wsInstance.onclose();
-    }
+    // GET läuft bis zum Konstruktor asynchron; ohne Timer-Tick kurz auf die Instanz warten.
+    for (let i = 0; i < 20 && !wsInstance; i++) await new Promise((r) => setImmediate(r));
+    assert.ok(wsInstance, 'WebSocket wurde erzeugt');
 
-    mock.timers.tick(4000); // Expire collection timer
+    wsInstance.onopen?.();
+    assert.equal(typeof wsInstance.onclose, 'function', 'onclose-Handler ist gesetzt');
+    wsInstance.onclose(); // ohne jede Nachricht schließen
+
+    // Kein Timer-Tick: die Antwort muss allein durch das Schließen entstehen.
     const res = await resPromise;
 
     assert.equal(res.status, 502);
