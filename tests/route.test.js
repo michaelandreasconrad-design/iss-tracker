@@ -31,7 +31,8 @@ test('400 bei ungültigem Ausschnitt, ohne AISStream anzusprechen', async () => 
       assert.equal(wsConstructed, false, `WebSocket should not be constructed for invalid query: ${query}`);
     }
   } finally {
-    globalThis.WebSocket = originalWS;
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
   }
 });
 
@@ -63,8 +64,8 @@ test('fehlender x-forwarded-for-Header bricht nichts', async () => {
   assert.equal(res.status, 400, 'Expected 400 for missing x-forwarded-for with empty query');
 });
 
-// WebSocket-level tests using stubs
-test('collect: Abonnementmeldung enthält APIKey und BoundingBoxes, nicht in HTTP-Response', async () => {
+// WebSocket-level tests with mock.timers
+test('collect: Abonnementmeldung enthält APIKey, BoundingBoxes (snapped), FilterMessageTypes', async () => {
   process.env.AISSTREAM_API_KEY = 'test-key';
   let sentMessage = null;
   const originalWS = globalThis.WebSocket;
@@ -72,6 +73,7 @@ test('collect: Abonnementmeldung enthält APIKey und BoundingBoxes, nicht in HTT
 
   try {
     console.error = () => {};
+    await mock.timers.enable({ apis: ['setTimeout'] });
 
     globalThis.WebSocket = class {
       binaryType = 'arraybuffer';
@@ -81,7 +83,7 @@ test('collect: Abonnementmeldung enthält APIKey und BoundingBoxes, nicht in HTT
       onclose = null;
 
       constructor() {
-        setImmediate(() => this.onopen?.());
+        setTimeout(() => this.onopen?.(), 0);
       }
 
       send(msg) {
@@ -91,30 +93,36 @@ test('collect: Abonnementmeldung enthält APIKey und BoundingBoxes, nicht in HTT
       close() {}
     };
 
-    const res = await call('south=51&west=1&north=59&east=9', '10.0.3.1');
+    const resPromise = call('south=50.1&west=0.3&north=59.9&east=9.7', '10.0.3.1');
+    mock.timers.tick(0); // Allow onopen to fire
+    mock.timers.tick(4000); // Expire collection timer
+    const res = await resPromise;
 
     assert.equal(res.status, 200);
     assert.ok(sentMessage);
     assert.equal(sentMessage.APIKey, 'test-key');
-    assert.ok(sentMessage.BoundingBoxes);
-    assert.ok(sentMessage.FilterMessageTypes);
+    assert.deepEqual(sentMessage.BoundingBoxes, [[[50, 0], [60, 10]]]);
+    assert.deepEqual(sentMessage.FilterMessageTypes, ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData']);
 
     const body = await res.text();
     assert.doesNotMatch(body, /test-key|APIKey/i);
   } finally {
     delete process.env.AISSTREAM_API_KEY;
-    globalThis.WebSocket = originalWS;
+    await mock.timers.reset();
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
     console.error = originalError;
   }
 });
 
-test('collect: PositionReport-Meldungen + Timer -> 200 mit Schiffen', async () => {
+test('collect: PositionReport-Meldungen (string + binary) -> 200 mit Schiffen', async () => {
   process.env.AISSTREAM_API_KEY = 'test-key';
   const originalWS = globalThis.WebSocket;
   const originalError = console.error;
 
   try {
     console.error = () => {};
+    await mock.timers.enable({ apis: ['setTimeout'] });
 
     let wsInstance = null;
     globalThis.WebSocket = class {
@@ -126,7 +134,6 @@ test('collect: PositionReport-Meldungen + Timer -> 200 mit Schiffen', async () =
 
       constructor() {
         wsInstance = this;
-        setImmediate(() => this.onopen?.());
       }
 
       send() {}
@@ -136,50 +143,85 @@ test('collect: PositionReport-Meldungen + Timer -> 200 mit Schiffen', async () =
 
     const resPromise = call('south=52&west=2&north=58&east=8', '10.0.3.2');
 
-    setImmediate(() => {
-      if (wsInstance?.onmessage) {
-        wsInstance.onmessage({
-          data: JSON.stringify({
-            MessageType: 'PositionReport',
-            MMSI: 123456,
-            Latitude: 55,
-            Longitude: 5,
-            SOG: 10,
-          }),
-        });
-        wsInstance.onmessage({
-          data: new TextEncoder().encode(
-            JSON.stringify({
-              MessageType: 'PositionReport',
-              MMSI: 234567,
+    // Call onopen first to set the "opened" flag
+    if (wsInstance) {
+      wsInstance.onopen?.();
+      // Now send messages
+      // String frame (AISStream format with nested Message structure)
+      wsInstance.onmessage({
+        data: JSON.stringify({
+          MessageType: 'PositionReport',
+          MetaData: { MMSI: 111111 },
+          Message: {
+            PositionReport: {
+              Latitude: 55,
+              Longitude: 5,
+              Sog: 10,
+            },
+          },
+        }),
+      });
+      // String frame for different MMSI
+      wsInstance.onmessage({
+        data: JSON.stringify({
+          MessageType: 'PositionReport',
+          MetaData: { MMSI: 222222 },
+          Message: {
+            PositionReport: {
               Latitude: 54,
               Longitude: 4,
-              SOG: 12,
-            })
-          ),
-        });
-      }
-    });
+              Sog: 12,
+            },
+          },
+        }),
+      });
+      // Binary ArrayBuffer frame
+      const msg3 = JSON.stringify({
+        MessageType: 'PositionReport',
+        MetaData: { MMSI: 333333 },
+        Message: {
+          PositionReport: {
+            Latitude: 53,
+            Longitude: 3,
+            Sog: 8,
+          },
+        },
+      });
+      wsInstance.onmessage({
+        data: new TextEncoder().encode(msg3).buffer,
+      });
+    }
 
+    mock.timers.tick(4000); // Expire collection timer
     const res = await resPromise;
 
     assert.equal(res.status, 200);
     const json = await res.json();
-    assert.ok(Array.isArray(json.ships));
+    assert.equal(json.ships.length, 3);
+    const mmsis = json.ships.map(s => s.properties.mmsi).sort();
+    assert.deepEqual(mmsis, [111111, 222222, 333333]);
+    for (const ship of json.ships) {
+      assert.equal(ship.properties.source, 'ais');
+      assert.ok(Array.isArray(ship.geometry.coordinates));
+      assert.equal(ship.geometry.coordinates.length, 2);
+    }
   } finally {
     delete process.env.AISSTREAM_API_KEY;
-    globalThis.WebSocket = originalWS;
+    await mock.timers.reset();
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
     console.error = originalError;
   }
 });
 
-test('collect: opened aber null Meldungen bis Timer -> 200 {"ships":[]}', async () => {
+test('collect: opened aber null Meldungen -> 200 {"ships":[]}', async () => {
   process.env.AISSTREAM_API_KEY = 'test-key';
   const originalWS = globalThis.WebSocket;
   const originalError = console.error;
 
   try {
     console.error = () => {};
+    await mock.timers.enable({ apis: ['setTimeout'] });
 
     globalThis.WebSocket = class {
       binaryType = 'arraybuffer';
@@ -189,7 +231,7 @@ test('collect: opened aber null Meldungen bis Timer -> 200 {"ships":[]}', async 
       onclose = null;
 
       constructor() {
-        setImmediate(() => this.onopen?.());
+        setTimeout(() => this.onopen?.(), 0);
       }
 
       send() {}
@@ -198,6 +240,8 @@ test('collect: opened aber null Meldungen bis Timer -> 200 {"ships":[]}', async 
     };
 
     const resPromise = call('south=53&west=3&north=57&east=7', '10.0.3.3');
+    mock.timers.tick(0); // Allow onopen
+    mock.timers.tick(4000); // Expire collection timer
     const res = await resPromise;
 
     assert.equal(res.status, 200);
@@ -205,18 +249,21 @@ test('collect: opened aber null Meldungen bis Timer -> 200 {"ships":[]}', async 
     assert.deepEqual(json, { ships: [] });
   } finally {
     delete process.env.AISSTREAM_API_KEY;
-    globalThis.WebSocket = originalWS;
+    await mock.timers.reset();
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
     console.error = originalError;
   }
 });
 
-test('collect: nie geöffnet bis Timer -> 502', async () => {
+test('collect: nie geöffnet -> 502', async () => {
   process.env.AISSTREAM_API_KEY = 'test-key';
   const originalWS = globalThis.WebSocket;
   const originalError = console.error;
 
   try {
     console.error = () => {};
+    await mock.timers.enable({ apis: ['setTimeout'] });
 
     globalThis.WebSocket = class {
       binaryType = 'arraybuffer';
@@ -233,23 +280,27 @@ test('collect: nie geöffnet bis Timer -> 502', async () => {
     };
 
     const resPromise = call('south=54&west=4&north=56&east=6', '10.0.3.4');
+    mock.timers.tick(4000); // Expire collection timer without opening
     const res = await resPromise;
 
     assert.equal(res.status, 502);
   } finally {
     delete process.env.AISSTREAM_API_KEY;
-    globalThis.WebSocket = originalWS;
+    await mock.timers.reset();
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
     console.error = originalError;
   }
 });
 
-test('collect: {"error":"Api Key Is Not Valid"} -> 502, Antwort verrät nichts', async () => {
+test('collect: error message -> 502, Antwort verrät nichts', async () => {
   process.env.AISSTREAM_API_KEY = 'test-key';
   const originalWS = globalThis.WebSocket;
   const originalError = console.error;
 
   try {
     console.error = () => {};
+    await mock.timers.enable({ apis: ['setTimeout'] });
 
     let wsInstance = null;
     globalThis.WebSocket = class {
@@ -261,7 +312,6 @@ test('collect: {"error":"Api Key Is Not Valid"} -> 502, Antwort verrät nichts',
 
       constructor() {
         wsInstance = this;
-        setImmediate(() => this.onopen?.());
       }
 
       send() {}
@@ -271,14 +321,16 @@ test('collect: {"error":"Api Key Is Not Valid"} -> 502, Antwort verrät nichts',
 
     const resPromise = call('south=55&west=5&north=55.5&east=5.5', '10.0.3.5');
 
-    setImmediate(() => {
-      if (wsInstance?.onmessage) {
-        wsInstance.onmessage({
-          data: JSON.stringify({ error: 'Api Key Is Not Valid' }),
-        });
-      }
-    });
+    // Manually call onopen
+    wsInstance.onopen?.();
+    // Now send messages
+    if (wsInstance) {
+      wsInstance.onmessage({
+        data: JSON.stringify({ error: 'Api Key Is Not Valid' }),
+      });
+    }
 
+    mock.timers.tick(4000); // Expire collection timer
     const res = await resPromise;
 
     assert.equal(res.status, 502);
@@ -286,18 +338,21 @@ test('collect: {"error":"Api Key Is Not Valid"} -> 502, Antwort verrät nichts',
     assert.doesNotMatch(body, /Api Key Is Not Valid/);
   } finally {
     delete process.env.AISSTREAM_API_KEY;
-    globalThis.WebSocket = originalWS;
+    await mock.timers.reset();
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
     console.error = originalError;
   }
 });
 
-test('collect: close vor Message -> 502', async () => {
+test('collect: close -> 502', async () => {
   process.env.AISSTREAM_API_KEY = 'test-key';
   const originalWS = globalThis.WebSocket;
   const originalError = console.error;
 
   try {
     console.error = () => {};
+    await mock.timers.enable({ apis: ['setTimeout'] });
 
     let wsInstance = null;
     globalThis.WebSocket = class {
@@ -309,7 +364,6 @@ test('collect: close vor Message -> 502', async () => {
 
       constructor() {
         wsInstance = this;
-        setImmediate(() => this.onopen?.());
       }
 
       send() {}
@@ -319,23 +373,25 @@ test('collect: close vor Message -> 502', async () => {
 
     const resPromise = call('south=51.5&west=1.5&north=58.5&east=8.5', '10.0.3.6');
 
-    setImmediate(() => {
-      if (wsInstance?.onclose) {
-        wsInstance.onclose();
-      }
-    });
+    mock.timers.tick(0); // Allow onopen
+    if (wsInstance?.onclose) {
+      wsInstance.onclose();
+    }
 
+    mock.timers.tick(4000); // Expire collection timer
     const res = await resPromise;
 
     assert.equal(res.status, 502);
   } finally {
     delete process.env.AISSTREAM_API_KEY;
-    globalThis.WebSocket = originalWS;
+    await mock.timers.reset();
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
     console.error = originalError;
   }
 });
 
-test('collect: zwei parallele Anfragen für denselben Ausschnitt öffnen ein WebSocket', async () => {
+test('collect: concurrent requests für denselben Ausschnitt sharen ein WebSocket', async () => {
   process.env.AISSTREAM_API_KEY = 'test-key';
   const originalWS = globalThis.WebSocket;
   let constructionCount = 0;
@@ -343,6 +399,7 @@ test('collect: zwei parallele Anfragen für denselben Ausschnitt öffnen ein Web
 
   try {
     console.error = () => {};
+    await mock.timers.enable({ apis: ['setTimeout'] });
 
     globalThis.WebSocket = class {
       binaryType = 'arraybuffer';
@@ -353,7 +410,7 @@ test('collect: zwei parallele Anfragen für denselben Ausschnitt öffnen ein Web
 
       constructor() {
         constructionCount++;
-        setImmediate(() => this.onopen?.());
+        setTimeout(() => this.onopen?.(), 0);
       }
 
       send() {}
@@ -364,18 +421,23 @@ test('collect: zwei parallele Anfragen für denselben Ausschnitt öffnen ein Web
     const res1Promise = call('south=52.5&west=2.5&north=57.5&east=7.5', '10.0.3.7');
     const res2Promise = call('south=52.5&west=2.5&north=57.5&east=7.5', '10.0.3.7');
 
+    mock.timers.tick(0); // Allow onopen
+    mock.timers.tick(4000); // Expire collection timer
+
     await res1Promise;
     await res2Promise;
 
     assert.equal(constructionCount, 1, 'Only one WebSocket for same bbox');
   } finally {
     delete process.env.AISSTREAM_API_KEY;
-    globalThis.WebSocket = originalWS;
+    await mock.timers.reset();
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
     console.error = originalError;
   }
 });
 
-test('collect: gescheiterte Anfrage wird nicht gecacht', async () => {
+test('collect: fehlgeschlagene Anfrage wird nicht gecacht', async () => {
   process.env.AISSTREAM_API_KEY = 'test-key';
   const originalWS = globalThis.WebSocket;
   let constructionCountPhase1 = 0;
@@ -384,6 +446,7 @@ test('collect: gescheiterte Anfrage wird nicht gecacht', async () => {
 
   try {
     console.error = () => {};
+    await mock.timers.enable({ apis: ['setTimeout'] });
 
     // Phase 1: fehlgeschlagene Anfrage
     globalThis.WebSocket = class {
@@ -395,7 +458,7 @@ test('collect: gescheiterte Anfrage wird nicht gecacht', async () => {
 
       constructor() {
         constructionCountPhase1++;
-        setImmediate(() => this.onerror?.());
+        setTimeout(() => this.onerror?.(), 0);
       }
 
       send() {}
@@ -404,8 +467,11 @@ test('collect: gescheiterte Anfrage wird nicht gecacht', async () => {
     };
 
     const res1Promise = call('south=53.5&west=3.5&north=56.5&east=6.5', '10.0.3.8');
+    mock.timers.tick(0); // Allow onerror
+    mock.timers.tick(4000); // Expire collection timer
     const res1 = await res1Promise;
     assert.equal(res1.status, 502);
+    assert.equal(constructionCountPhase1, 1);
 
     // Phase 2: neue Anfrage mit gleichem Ausschnitt sollte neue Socket öffnen
     globalThis.WebSocket = class {
@@ -417,7 +483,7 @@ test('collect: gescheiterte Anfrage wird nicht gecacht', async () => {
 
       constructor() {
         constructionCountPhase2++;
-        setImmediate(() => this.onopen?.());
+        setTimeout(() => this.onopen?.(), 0);
       }
 
       send() {}
@@ -426,12 +492,16 @@ test('collect: gescheiterte Anfrage wird nicht gecacht', async () => {
     };
 
     const res2Promise = call('south=53.5&west=3.5&north=56.5&east=6.5', '10.0.3.8');
+    mock.timers.tick(0); // Allow onopen
+    mock.timers.tick(4000); // Expire collection timer
     const res2 = await res2Promise;
     assert.equal(res2.status, 200);
     assert.equal(constructionCountPhase2, 1, 'Failed request not cached, new socket needed');
   } finally {
     delete process.env.AISSTREAM_API_KEY;
-    globalThis.WebSocket = originalWS;
+    await mock.timers.reset();
+    if (originalWS === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWS;
     console.error = originalError;
   }
 });
