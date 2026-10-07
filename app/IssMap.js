@@ -29,7 +29,7 @@ function splitAtAntimeridian(points) {
   return segments;
 }
 
-export default function IssMap({ position }) {
+export default function IssMap({ position, follow }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -69,6 +69,13 @@ export default function IssMap({ position }) {
     if (points.length > MAX_TRAIL_POINTS) points.shift();
     trailRef.current.setLatLngs(splitAtAntimeridian(points));
   }, [position]);
+
+  // Folgen: bei jeder neuen Position und sofort beim Einschalten zur ISS schwenken.
+  useEffect(() => {
+    if (follow && position && mapRef.current) {
+      mapRef.current.panTo(position, { animate: true, duration: 1 });
+    }
+  }, [follow, position]);
 
   return <div ref={containerRef} className="map" />;
 }

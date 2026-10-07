@@ -21,6 +21,7 @@ const nf = (value, digits) =>
 export default function Home() {
   const [iss, setIss] = useState(null);
   const [error, setError] = useState(false);
+  const [follow, setFollow] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -72,7 +73,16 @@ export default function Home() {
         <Stat label="Geschwindigkeit" value={iss ? `${nf(iss.velocity, 0)} km/h` : '–'} />
       </section>
 
-      <IssMap position={iss ? [iss.lat, iss.lon] : null} />
+      <label className="follow">
+        <input
+          type="checkbox"
+          checked={follow}
+          onChange={(e) => setFollow(e.target.checked)}
+        />
+        Karte folgt der ISS
+      </label>
+
+      <IssMap position={iss ? [iss.lat, iss.lon] : null} follow={follow} />
     </main>
   );
 }
