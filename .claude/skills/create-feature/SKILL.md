@@ -58,8 +58,10 @@ Alle Abschnitte sind Pflicht. **"Tests"** darf nie leer bleiben — auch bei kle
 ## Tests
 <!-- IMMER ausfüllen. Konkrete Testfälle benennen, die das Feature absichern:
      - welche Ebene (Unit, Integration, E2E) und welcher Runner
-       (Frontend: Vitest unter `frontend/src/**/*.test.ts(x)`;
-        Backend: pytest unter `backend/tests/`)
+       (Das Projekt ist eine Next.js-App unter `app/` und hat noch keinen Test-Runner.
+        Ist keiner eingerichtet: Testfälle als manuell im Browser prüfbare Schritte
+        formulieren und die Einführung eines Runners, z. B. Vitest, unter
+        "Offene Fragen" notieren. Sobald ein Runner existiert, diesen nennen.)
      - die wichtigsten Happy-Path- und Edge-/Fehlerfälle als Bulletpoints
      - bei Bugfixes: ein Regressionstest, der ohne den Fix fehlschlägt -->
 - [ ] Liste der konkreten Testfälle (deutsch)
