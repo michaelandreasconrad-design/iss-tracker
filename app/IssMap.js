@@ -15,7 +15,7 @@ import {
   loadVessel,
   shipIcon,
 } from './ships';
-import { isInsideBaltic, mergeShips, vesselFromProps } from './aisCore';
+import { isInsideBaltic, limitBbox, mergeShips, vesselFromProps } from './aisCore';
 
 const issIcon = L.divIcon({
   className: 'iss-marker',
@@ -174,6 +174,7 @@ export default function IssMap({ position, follow, showShips }) {
     let ais = null; // AISStream-Schiffe; null = noch nicht geladen oder nicht nötig
     let aisController = null;
     let aisTimer = null;
+    let fetchedBox = null; // zuletzt (auch laufend) abgefragter AISStream-Bereich
     const markers = new Map(); // MMSI -> Marker, damit offene Popups beim Verschieben bestehen bleiben
 
     function viewBounds() {
@@ -241,19 +242,44 @@ export default function IssMap({ position, follow, showShips }) {
       }
     }
 
-    async function loadAis() {
-      aisController?.abort();
+    function isInside(inner, outer) {
+      return (
+        inner.south >= outer.south &&
+        inner.north <= outer.north &&
+        inner.west >= outer.west &&
+        inner.east <= outer.east
+      );
+    }
+
+    // Holt einen größeren Bereich als sichtbar und lädt erst neu, wenn der Ausschnitt ihn verlässt
+    // (sonst löst jedes Nachführen der Karte beim Folgen der ISS eine Anfrage aus). force = Auffrischen.
+    async function loadAis(force = false) {
+      clearTimeout(aisTimer);
       const bounds = viewBounds();
       if (map.getZoom() < SHIP_MIN_ZOOM || isInsideBaltic(bounds)) {
+        aisController?.abort();
         ais = null;
+        fetchedBox = null;
         setAisError(false);
         render();
         return;
       }
+      const plain = map.getBounds();
+      const view = { south: plain.getSouth(), west: plain.getWest(), north: plain.getNorth(), east: plain.getEast() };
+      if (!force && fetchedBox && isInside(view, fetchedBox)) return;
+      aisController?.abort();
+      const padded = map.getBounds().pad(0.5);
+      const box = limitBbox({
+        south: padded.getSouth(),
+        west: padded.getWest(),
+        north: padded.getNorth(),
+        east: padded.getEast(),
+      });
+      fetchedBox = box;
       const controller = new AbortController();
       aisController = controller;
       try {
-        const data = await loadAisShips(bounds, controller.signal);
+        const data = await loadAisShips(box, controller.signal);
         if (!active || controller.signal.aborted) return;
         ais = data;
         setAisError(false);
@@ -263,9 +289,11 @@ export default function IssMap({ position, follow, showShips }) {
         if (error.message === 'HTTP 400') {
           // Ausschnitt, den der Server nicht bedienen kann (z. B. jenseits des Datumswechsels): keine Daten, kein Fehlerhinweis.
           ais = [];
+          fetchedBox = null;
           setAisError(false);
           render();
         } else {
+          fetchedBox = null;
           setAisError(true);
         }
       }
@@ -273,7 +301,7 @@ export default function IssMap({ position, follow, showShips }) {
 
     function scheduleAis() {
       clearTimeout(aisTimer);
-      aisTimer = setTimeout(loadAis, AIS_DEBOUNCE_MS);
+      aisTimer = setTimeout(() => loadAis(), AIS_DEBOUNCE_MS);
     }
 
     function onMoveEnd() {
@@ -285,10 +313,10 @@ export default function IssMap({ position, follow, showShips }) {
     map.attributionControl.addAttribution(AIS_ATTRIBUTION);
     map.on('moveend', onMoveEnd);
     load();
-    loadAis();
+    loadAis(true);
     const id = setInterval(() => {
       load();
-      loadAis();
+      loadAis(true);
     }, SHIP_REFRESH_MS);
 
     return () => {
