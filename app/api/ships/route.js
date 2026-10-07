@@ -40,6 +40,7 @@ function collect(bbox, apiKey) {
     const collector = createCollector(MAX_SHIPS);
     let settled = false;
     let received = false;
+    let opened = false;
     let timer = null;
     const ws = new WebSocket(STREAM_URL);
     ws.binaryType = 'arraybuffer';
@@ -57,9 +58,10 @@ function collect(bbox, apiKey) {
       else resolve(collector.result());
     };
 
-    timer = setTimeout(() => finish(null), COLLECT_MS);
+    timer = setTimeout(() => finish(opened ? null : new Error('Zeitüberschreitung beim Verbindungsaufbau')), COLLECT_MS);
 
     ws.onopen = () => {
+      opened = true;
       ws.send(
         JSON.stringify({
           APIKey: apiKey,
