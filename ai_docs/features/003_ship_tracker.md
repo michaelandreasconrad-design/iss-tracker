@@ -50,7 +50,7 @@ Das Projekt hat noch keinen Test-Runner. Die Fälle sind deshalb manuell im Brow
 - [ ] Bei Proxy-Route: Aufruf mit ungültigen Parametern (Text statt Zahl, Werte außerhalb ±90°/±180°) liefert HTTP 400 und keine Anfrage an die Quelle.
 
 ## Umsetzungsideen / Hinweise
-- Abruf immer mit den Grenzen des Kartenausschnitts, nicht „alle Schiffe holen und im Browser filtern“.
+- Umgesetzt wurde abweichend vom ersten Entwurf: Die Digitraffic-API kennt keinen Kartenausschnitt (Bounding Box), nur einen Radius. Es sind nur ca. 900 Schiffe (ca. 360 KB), die API cacht 60 s und erlaubt Browser-Aufrufe (CORS). Deshalb holt der Browser einmal pro Minute alle Positionen und filtert auf den sichtbaren Ausschnitt. Ein Proxy und eine neue API-Route entfallen. Die API verlangt gzip (Browser senden es automatisch).
 - Positions- und Schiffsdaten sind getrennte Abrufe. Schiffsnamen und -typen nur beim Klick nachladen und zwischenspeichern.
 - Optional später: Schiffstyp als Farbe (Fracht, Tanker, Passagier, Fischerei), Suche nach Schiffsname oder MMSI, Spur des angeklickten Schiffs.
 

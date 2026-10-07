@@ -3,6 +3,16 @@
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useEffect, useRef, useState } from 'react';
+import {
+  MAX_SHIPS,
+  SHIP_ATTRIBUTION,
+  SHIP_MIN_ZOOM,
+  SHIP_REFRESH_MS,
+  buildPopupContent,
+  loadShips,
+  loadVessel,
+  shipIcon,
+} from './ships';
 
 const issIcon = L.divIcon({
   className: 'iss-marker',
@@ -45,7 +55,7 @@ function readStoredView() {
   }
 }
 
-export default function IssMap({ position, follow }) {
+export default function IssMap({ position, follow, showShips }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -54,6 +64,11 @@ export default function IssMap({ position, follow }) {
   const trailPointsRef = useRef([]);
   const streetLayerRef = useRef(null);
   const satelliteLayerRef = useRef(null);
+  const shipsLayerRef = useRef(null);
+
+  // Hinweise zum Schiffs-Layer: { kind: 'zoom' | 'empty' | 'limit', total? } bzw. Abruffehler.
+  const [shipNotice, setShipNotice] = useState(null);
+  const [shipError, setShipError] = useState(false);
 
   // Die Karte lädt nur im Browser (ssr: false), daher ist localStorage hier direkt lesbar.
   const [view, setView] = useState(readStoredView);
@@ -79,6 +94,8 @@ export default function IssMap({ position, follow }) {
     satellite.on('tileload', () => setSatelliteError(false));
     satelliteLayerRef.current = satellite;
 
+    shipsLayerRef.current = L.layerGroup().addTo(map);
+
     // Helle Kontur unter der Spur, damit sie auf Wasser und Wald sichtbar bleibt.
     trailCasingRef.current = L.polyline([], { color: '#ffffff', weight: 6, opacity: 0.7 }).addTo(map);
     trailRef.current = L.polyline([], { color: '#38bdf8', weight: 3, opacity: 0.9 }).addTo(map);
@@ -91,6 +108,7 @@ export default function IssMap({ position, follow }) {
       trailCasingRef.current = null;
       streetLayerRef.current = null;
       satelliteLayerRef.current = null;
+      shipsLayerRef.current = null;
       trailPointsRef.current = [];
     };
   }, []);
@@ -112,7 +130,7 @@ export default function IssMap({ position, follow }) {
     const map = mapRef.current;
     if (!map || !position) return;
     if (!markerRef.current) {
-      markerRef.current = L.marker(position, { icon: issIcon }).addTo(map);
+      markerRef.current = L.marker(position, { icon: issIcon, zIndexOffset: 1000 }).addTo(map);
       map.setView(position, 3);
     } else {
       markerRef.current.setLatLng(position);
@@ -125,6 +143,92 @@ export default function IssMap({ position, follow }) {
     trailCasingRef.current.setLatLngs(segments);
     trailRef.current.setLatLngs(segments);
   }, [position]);
+
+  // Schiffe: einmal pro Minute alle Positionen holen (die API kennt nur einen Radius, keinen
+  // Kartenausschnitt) und im Browser auf den sichtbaren Ausschnitt begrenzen.
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = shipsLayerRef.current;
+    if (!showShips || !map || !layer) return;
+
+    let active = true;
+    let ships = null;
+    const markers = new Map(); // MMSI -> Marker, damit offene Popups beim Verschieben bestehen bleiben
+
+    function render() {
+      if (!active || !ships) return;
+      const zoomedOut = map.getZoom() < SHIP_MIN_ZOOM;
+      const bounds = map.getBounds().pad(0.1);
+      const inView = zoomedOut
+        ? []
+        : ships.filter((f) => {
+            const [lon, lat] = f.geometry.coordinates;
+            return bounds.contains([lat, lon]);
+          });
+      const shown = new Map(inView.slice(0, MAX_SHIPS).map((f) => [f.properties.mmsi, f]));
+
+      for (const [mmsi, marker] of markers) {
+        if (!shown.has(mmsi)) {
+          layer.removeLayer(marker);
+          markers.delete(mmsi);
+        }
+      }
+      for (const [mmsi, feature] of shown) {
+        const [lon, lat] = feature.geometry.coordinates;
+        const props = feature.properties;
+        const existing = markers.get(mmsi);
+        if (!existing) {
+          const marker = L.marker([lat, lon], { icon: shipIcon(props), keyboard: false });
+          marker.shipProps = props;
+          marker.on('click', async () => {
+            const vessel = await loadVessel(marker.shipProps.mmsi);
+            if (active) marker.bindPopup(buildPopupContent(marker.shipProps, vessel)).openPopup();
+          });
+          layer.addLayer(marker);
+          markers.set(mmsi, marker);
+        } else if (existing.shipProps !== props) {
+          existing.shipProps = props;
+          existing.setLatLng([lat, lon]);
+          existing.setIcon(shipIcon(props));
+        }
+      }
+
+      if (zoomedOut) setShipNotice({ kind: 'zoom' });
+      else if (inView.length === 0) setShipNotice({ kind: 'empty' });
+      else if (inView.length > MAX_SHIPS) setShipNotice({ kind: 'limit', total: inView.length });
+      else setShipNotice(null);
+    }
+
+    async function load() {
+      try {
+        const data = await loadShips();
+        if (!active) return;
+        ships = data;
+        setShipError(false);
+        render();
+      } catch {
+        if (active) setShipError(true);
+      }
+    }
+
+    map.attributionControl.addAttribution(SHIP_ATTRIBUTION);
+    map.on('moveend', render);
+    load();
+    const id = setInterval(load, SHIP_REFRESH_MS);
+
+    return () => {
+      active = false;
+      clearInterval(id);
+      layer.clearLayers();
+      // Wurde die Karte schon entfernt (Unmount), gibt es nichts mehr abzumelden.
+      if (mapRef.current === map) {
+        map.off('moveend', render);
+        map.attributionControl.removeAttribution(SHIP_ATTRIBUTION);
+      }
+      setShipNotice(null);
+      setShipError(false);
+    };
+  }, [showShips]);
 
   // Folgen: bei jeder neuen Position und sofort beim Einschalten zur ISS schwenken.
   useEffect(() => {
@@ -158,11 +262,27 @@ export default function IssMap({ position, follow }) {
       >
         {view === 'satellite' ? '🗺️' : '🌍'}
       </button>
-      {view === 'satellite' && satelliteError && (
-        <div className="map-hint" role="status">
-          Das Satellitenbild konnte nicht vollständig geladen werden.
-        </div>
-      )}
+      <div className="map-hints">
+        {view === 'satellite' && satelliteError && (
+          <div className="map-hint" role="status">
+            Das Satellitenbild konnte nicht vollständig geladen werden.
+          </div>
+        )}
+        {showShips && shipError && (
+          <div className="map-hint" role="status">
+            Die Schiffsdaten sind gerade nicht erreichbar. Wir versuchen es in einer Minute erneut.
+          </div>
+        )}
+        {showShips && shipNotice && (
+          <div className="map-hint map-hint--info" role="status">
+            {shipNotice.kind === 'zoom' && 'Zum Anzeigen der Schiffe weiter hineinzoomen.'}
+            {shipNotice.kind === 'empty' &&
+              'In diesem Gebiet liegen keine Schiffsdaten vor (Abdeckung: Ostsee).'}
+            {shipNotice.kind === 'limit' &&
+              `Der Ausschnitt enthält ${shipNotice.total} Schiffe, angezeigt werden ${MAX_SHIPS}.`}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -123,12 +123,45 @@ header p { margin: 4px 0 16px; color: var(--text-muted); }
 }
 .view-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-.map-hint {
+.map-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+/* Hinweise stapeln sich links unten über der Karte. */
+.map-hints {
   position: absolute;
   left: 10px;
   bottom: 30px;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   max-width: calc(100% - 20px);
+}
+
+.map-hint--info {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--text-muted);
+}
+
+/* Schiffsmarker: kräftiges Orange mit dunkler Kontur, auf Straßenkarte und Satellitenbild sichtbar. */
+.ship-marker {
+  background: none;
+  border: none;
+}
+.ship-marker svg {
+  display: block;
+  margin: auto;
+  fill: #f59e0b;
+  stroke: #111827;
+  stroke-width: 1.3;
+}
+
+.map-hint {
   padding: 6px 10px;
   font-size: 0.85rem;
   color: var(--error-text);

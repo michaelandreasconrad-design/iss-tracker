@@ -12,6 +12,7 @@ const IssMap = dynamic(() => import('./IssMap'), {
 
 const API_URL = 'https://api.wheretheiss.at/v1/satellites/25544';
 const POLL_INTERVAL_MS = 5000;
+const SHIPS_STORAGE_KEY = 'showShips';
 
 // Werte des API-Felds `visibility`: daylight, visible (Dämmerung), eclipsed.
 const DAYLIGHT = {
@@ -30,8 +31,27 @@ export default function Home() {
   const [iss, setIss] = useState(null);
   const [error, setError] = useState(false);
   const [follow, setFollow] = useState(false);
+  const [showShips, setShowShips] = useState(false);
   const [crew, setCrew] = useState(null);
   const [crewError, setCrewError] = useState(false);
+
+  // Gespeicherte Wahl erst nach dem Laden lesen, damit Server- und Client-Markup übereinstimmen.
+  useEffect(() => {
+    try {
+      setShowShips(localStorage.getItem(SHIPS_STORAGE_KEY) === 'true');
+    } catch {
+      // localStorage nicht verfügbar: Standard (aus) bleibt.
+    }
+  }, []);
+
+  function changeShowShips(checked) {
+    setShowShips(checked);
+    try {
+      localStorage.setItem(SHIPS_STORAGE_KEY, String(checked));
+    } catch {
+      // Speichern nicht möglich (z. B. privater Modus): Wahl gilt nur für diese Sitzung.
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -109,16 +129,26 @@ export default function Home() {
         />
       </section>
 
-      <label className="follow">
-        <input
-          type="checkbox"
-          checked={follow}
-          onChange={(e) => setFollow(e.target.checked)}
-        />
-        Karte folgt der ISS
-      </label>
+      <div className="map-options">
+        <label className="follow">
+          <input
+            type="checkbox"
+            checked={follow}
+            onChange={(e) => setFollow(e.target.checked)}
+          />
+          Karte folgt der ISS
+        </label>
+        <label className="follow">
+          <input
+            type="checkbox"
+            checked={showShips}
+            onChange={(e) => changeShowShips(e.target.checked)}
+          />
+          Schiffe anzeigen (Ostsee)
+        </label>
+      </div>
 
-      <IssMap position={iss ? [iss.lat, iss.lon] : null} follow={follow} />
+      <IssMap position={iss ? [iss.lat, iss.lon] : null} follow={follow} showShips={showShips} />
 
       <section className="crew" aria-label="Besatzung">
         <h2>Aktuell an Bord{crew ? ` (${crew.length})` : ''}</h2>
