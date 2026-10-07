@@ -73,3 +73,16 @@ header p { margin: 4px 0 16px; color: #94a3b8; }
   cursor: pointer;
   user-select: none;
 }
+
+.crew { margin-top: 24px; }
+.crew h2 { font-size: 1.1rem; margin: 0 0 8px; }
+.crew ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.crew li { background: #1e293b; border-radius: 8px; padding: 8px 12px; }
+.crew-note { color: #94a3b8; margin: 0; }

@@ -29,6 +29,8 @@ export default function Home() {
   const [iss, setIss] = useState(null);
   const [error, setError] = useState(false);
   const [follow, setFollow] = useState(false);
+  const [crew, setCrew] = useState(null);
+  const [crewError, setCrewError] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -57,6 +59,20 @@ export default function Home() {
     return () => {
       active = false;
       clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/astros')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => active && setCrew(data.people))
+      .catch(() => active && setCrewError(true));
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -99,6 +115,23 @@ export default function Home() {
       </label>
 
       <IssMap position={iss ? [iss.lat, iss.lon] : null} follow={follow} />
+
+      <section className="crew" aria-label="Besatzung">
+        <h2>Aktuell an Bord{crew ? ` (${crew.length})` : ''}</h2>
+        {crewError ? (
+          <p className="crew-note">Die Besatzungsliste ist gerade nicht verfügbar.</p>
+        ) : !crew ? (
+          <p className="crew-note">Wird geladen …</p>
+        ) : crew.length === 0 ? (
+          <p className="crew-note">Keine Daten zur Besatzung vorhanden.</p>
+        ) : (
+          <ul>
+            {crew.map((name) => (
+              <li key={name}>👨‍🚀 {name}</li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }
