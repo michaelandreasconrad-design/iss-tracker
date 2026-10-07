@@ -12,6 +12,13 @@ const IssMap = dynamic(() => import('./IssMap'), {
 const API_URL = 'https://api.wheretheiss.at/v1/satellites/25544';
 const POLL_INTERVAL_MS = 5000;
 
+// Werte des API-Felds `visibility`: daylight, visible (Dämmerung), eclipsed.
+const DAYLIGHT = {
+  daylight: { label: 'Tag', icon: '☀️' },
+  visible: { label: 'Dämmerung', icon: '🌅' },
+  eclipsed: { label: 'Nacht', icon: '🌙' },
+};
+
 const nf = (value, digits) =>
   value.toLocaleString('de-DE', {
     minimumFractionDigits: digits,
@@ -37,6 +44,7 @@ export default function Home() {
           lon: data.longitude,
           altitude: data.altitude,
           velocity: data.velocity,
+          visibility: data.visibility,
         });
         setError(false);
       } catch {
@@ -71,6 +79,14 @@ export default function Home() {
         <Stat label="Länge" value={iss ? `${nf(iss.lon, 4)}°` : '–'} />
         <Stat label="Höhe" value={iss ? `${nf(iss.altitude, 1)} km` : '–'} />
         <Stat label="Geschwindigkeit" value={iss ? `${nf(iss.velocity, 0)} km/h` : '–'} />
+        <Stat
+          label="Tageszeit"
+          value={
+            iss && DAYLIGHT[iss.visibility]
+              ? `${DAYLIGHT[iss.visibility].icon} ${DAYLIGHT[iss.visibility].label}`
+              : '–'
+          }
+        />
       </section>
 
       <label className="follow">
