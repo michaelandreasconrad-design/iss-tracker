@@ -144,53 +144,51 @@ test('collect: PositionReport-Meldungen (string + binary) -> 200 mit Schiffen', 
     const resPromise = call('south=52&west=2&north=58&east=8', '10.0.3.2');
 
     // Call onopen first to set the "opened" flag
-    if (wsInstance) {
-      wsInstance.onopen?.();
-      // Now send messages
-      // String frame (AISStream format with nested Message structure)
-      wsInstance.onmessage({
-        data: JSON.stringify({
-          MessageType: 'PositionReport',
-          MetaData: { MMSI: 111111 },
-          Message: {
-            PositionReport: {
-              Latitude: 55,
-              Longitude: 5,
-              Sog: 10,
-            },
-          },
-        }),
-      });
-      // String frame for different MMSI
-      wsInstance.onmessage({
-        data: JSON.stringify({
-          MessageType: 'PositionReport',
-          MetaData: { MMSI: 222222 },
-          Message: {
-            PositionReport: {
-              Latitude: 54,
-              Longitude: 4,
-              Sog: 12,
-            },
-          },
-        }),
-      });
-      // Binary ArrayBuffer frame
-      const msg3 = JSON.stringify({
+    wsInstance.onopen?.();
+    // Now send messages with exact coordinates for assertions
+    // String frame: MMSI 111111, lon=5, lat=55
+    wsInstance.onmessage({
+      data: JSON.stringify({
         MessageType: 'PositionReport',
-        MetaData: { MMSI: 333333 },
+        MetaData: { MMSI: 111111 },
         Message: {
           PositionReport: {
-            Latitude: 53,
-            Longitude: 3,
-            Sog: 8,
+            Latitude: 55,
+            Longitude: 5,
+            Sog: 10,
           },
         },
-      });
-      wsInstance.onmessage({
-        data: new TextEncoder().encode(msg3).buffer,
-      });
-    }
+      }),
+    });
+    // String frame: MMSI 222222, lon=4, lat=54
+    wsInstance.onmessage({
+      data: JSON.stringify({
+        MessageType: 'PositionReport',
+        MetaData: { MMSI: 222222 },
+        Message: {
+          PositionReport: {
+            Latitude: 54,
+            Longitude: 4,
+            Sog: 12,
+          },
+        },
+      }),
+    });
+    // Binary ArrayBuffer frame: MMSI 333333, lon=3, lat=53
+    const msg3 = JSON.stringify({
+      MessageType: 'PositionReport',
+      MetaData: { MMSI: 333333 },
+      Message: {
+        PositionReport: {
+          Latitude: 53,
+          Longitude: 3,
+          Sog: 8,
+        },
+      },
+    });
+    wsInstance.onmessage({
+      data: new TextEncoder().encode(msg3).buffer,
+    });
 
     mock.timers.tick(4000); // Expire collection timer
     const res = await resPromise;
@@ -198,12 +196,22 @@ test('collect: PositionReport-Meldungen (string + binary) -> 200 mit Schiffen', 
     assert.equal(res.status, 200);
     const json = await res.json();
     assert.equal(json.ships.length, 3);
-    const mmsis = json.ships.map(s => s.properties.mmsi).sort();
+
+    // Map MMSI to expected coordinates [lon, lat]
+    const expectedCoordinates = {
+      111111: [5, 55],
+      222222: [4, 54],
+      333333: [3, 53],
+    };
+
+    // Verify each ship's exact coordinates and source
+    const mmsis = json.ships.map(s => s.properties.mmsi).sort((a, b) => a - b);
     assert.deepEqual(mmsis, [111111, 222222, 333333]);
+
     for (const ship of json.ships) {
+      const mmsi = ship.properties.mmsi;
       assert.equal(ship.properties.source, 'ais');
-      assert.ok(Array.isArray(ship.geometry.coordinates));
-      assert.equal(ship.geometry.coordinates.length, 2);
+      assert.deepEqual(ship.geometry.coordinates, expectedCoordinates[mmsi], `MMSI ${mmsi}`);
     }
   } finally {
     delete process.env.AISSTREAM_API_KEY;
@@ -323,12 +331,10 @@ test('collect: error message -> 502, Antwort verrät nichts', async () => {
 
     // Manually call onopen
     wsInstance.onopen?.();
-    // Now send messages
-    if (wsInstance) {
-      wsInstance.onmessage({
-        data: JSON.stringify({ error: 'Api Key Is Not Valid' }),
-      });
-    }
+    // Send error message
+    wsInstance.onmessage({
+      data: JSON.stringify({ error: 'Api Key Is Not Valid' }),
+    });
 
     mock.timers.tick(4000); // Expire collection timer
     const res = await resPromise;
