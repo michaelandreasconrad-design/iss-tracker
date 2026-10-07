@@ -4,24 +4,24 @@
 Die Karte zeigt bisher nur die ISS. Nutzer möchten zusätzlich Schiffe live auf der Karte sehen, auch in der Satellitenansicht (`002_satellite_view.md`), wo die Meere erkennbar sind. Angenommen wird ein zuschaltbarer Layer in der bestehenden Karte, keine eigene zweite App.
 
 ## Anforderungen
-- [ ] Als Nutzer möchte ich per Schalter „Schiffe anzeigen“ Schiffspositionen auf der Karte ein- und ausblenden. Standard: aus.
-- [ ] Als Nutzer möchte ich ein Schiff anklicken und Name, MMSI, Schiffstyp, Geschwindigkeit, Kurs und Ziel sehen (sofern vorhanden).
-- [ ] Schiffe erscheinen als eigene Marker, die sich vom ISS-Marker klar unterscheiden und nach Kurs (COG bzw. Heading) gedreht sind. Stehende Schiffe (Geschwindigkeit ≈ 0) werden ohne Richtung dargestellt.
+- [x] Als Nutzer möchte ich per Schalter „Schiffe anzeigen“ Schiffspositionen auf der Karte ein- und ausblenden. Standard: aus.
+- [x] Als Nutzer möchte ich ein Schiff anklicken und Name, MMSI, Schiffstyp, Geschwindigkeit, Kurs und Ziel sehen (sofern vorhanden).
+- [x] Schiffe erscheinen als eigene Marker, die sich vom ISS-Marker klar unterscheiden und nach Kurs (COG bzw. Heading) gedreht sind. Stehende Schiffe (Geschwindigkeit ≈ 0) werden ohne Richtung dargestellt.
 - [ ] Positionen werden alle 60 Sekunden aktualisiert (AIS-Daten ändern sich seltener als die ISS). Der ISS-Takt von ca. 5 s bleibt unberührt.
-- [ ] Es werden nur Schiffe im sichtbaren Kartenausschnitt dargestellt. Bei zu niedriger Zoomstufe (unter 5) erscheint ein Hinweis „Zum Anzeigen der Schiffe weiter hineinzoomen“, statt Tausende Marker zu zeichnen.
-- [ ] Höchstens 500 Schiffe gleichzeitig. Wird die Grenze erreicht, steht ein Hinweis „Ausschnitt enthält mehr Schiffe als angezeigt“ da.
-- [ ] Ist die Datenquelle nicht erreichbar, erscheint ein verständlicher Hinweis. Karte, ISS-Anzeige und Polling bleiben unberührt, und der nächste Abruf versucht es erneut.
-- [ ] Die Quellenangabe der Datenquelle steht sichtbar auf der Karte (Attribution), solange der Layer aktiv ist.
-- [ ] Die Wahl „Schiffe anzeigen“ wird in `localStorage` gespeichert (Schlüssel `showShips`).
-- [ ] Die Schiffe sind in beiden Themes (Hell und Dunkel) und in beiden Kartenansichten (Straße, Satellit) gut erkennbar.
+- [x] Es werden nur Schiffe im sichtbaren Kartenausschnitt dargestellt. Bei zu niedriger Zoomstufe (unter 5) erscheint ein Hinweis „Zum Anzeigen der Schiffe weiter hineinzoomen“, statt Tausende Marker zu zeichnen.
+- [x] Höchstens 500 Schiffe gleichzeitig. Wird die Grenze erreicht, steht ein Hinweis „Ausschnitt enthält mehr Schiffe als angezeigt“ da.
+- [x] Ist die Datenquelle nicht erreichbar, erscheint ein verständlicher Hinweis. Karte, ISS-Anzeige und Polling bleiben unberührt, und der nächste Abruf versucht es erneut.
+- [x] Die Quellenangabe der Datenquelle steht sichtbar auf der Karte (Attribution), solange der Layer aktiv ist.
+- [x] Die Wahl „Schiffe anzeigen“ wird in `localStorage` gespeichert (Schlüssel `showShips`).
+- [x] Die Schiffe sind in beiden Themes (Hell und Dunkel) und in beiden Kartenansichten (Straße, Satellit) gut erkennbar.
 - [ ] Der Schalter ist per Tastatur bedienbar und hat eine Beschriftung für Screenreader.
 
 ## Definition of Done
 - [ ] Alle Anforderungen oben sind erfüllt, in beiden Themes und beiden Kartenansichten.
-- [ ] Die Content Security Policy in `middleware.js` erlaubt die Datenquelle unter `connect-src` (bzw. nur `'self'`, falls ein Proxy genutzt wird). Es gibt keine CSP-Fehler in der Konsole.
-- [ ] Es stehen keine API-Schlüssel oder Secrets im Code oder im Repo.
+- [x] Die Content Security Policy in `middleware.js` erlaubt die Datenquelle unter `connect-src` (bzw. nur `'self'`, falls ein Proxy genutzt wird). Es gibt keine CSP-Fehler in der Konsole.
+- [x] Es stehen keine API-Schlüssel oder Secrets im Code oder im Repo.
 - [ ] ISS-Marker, Spur, „Karte folgt der ISS“, Astronautenliste und Theme-/Ansichtsumschalter laufen unverändert.
-- [ ] Der StackHawk-Neuscan (`hawk rescan`) zeigt keine neuen Befunde, auch für eine eventuelle neue API-Route.
+- [x] Der StackHawk-Neuscan (`hawk rescan`) zeigt keine neuen Befunde, auch für eine eventuelle neue API-Route.
 - [ ] Tests laufen (siehe „Tests“), Änderung ist auf Vercel deployt und dort geprüft.
 
 ## Betroffene Bereiche & Technik
@@ -35,17 +35,17 @@ Die Karte zeigt bisher nur die ISS. Nutzer möchten zusätzlich Schiffe live auf
 
 ## Tests
 Das Projekt hat noch keinen Test-Runner. Die Fälle sind deshalb manuell im Browser prüfbar formuliert (Produktion und `localhost:3000`):
-- [ ] Happy Path: „Schiffe anzeigen“ einschalten, auf den Golf von Finnland (Helsinki–Tallinn) zoomen. Mehrere Schiffe erscheinen, Marker sind nach Kurs gedreht.
-- [ ] Klick auf ein Schiff zeigt ein Popup mit Name, MMSI, Geschwindigkeit und Kurs. Fehlende Felder (z. B. kein Ziel) werden weggelassen oder mit „–“ angezeigt, ohne Fehlermeldung.
+- [x] Happy Path: „Schiffe anzeigen“ einschalten, auf den Golf von Finnland (Helsinki–Tallinn) zoomen. Mehrere Schiffe erscheinen, Marker sind nach Kurs gedreht.
+- [x] Klick auf ein Schiff zeigt ein Popup mit Name, MMSI, Geschwindigkeit und Kurs. Fehlende Felder (z. B. kein Ziel) werden weggelassen oder mit „–“ angezeigt, ohne Fehlermeldung.
 - [ ] Nach ca. 60 s bewegen sich fahrende Schiffe sichtbar, ohne dass die Karte flackert oder der Ausschnitt springt.
-- [ ] Zoom unter Stufe 5: Marker verschwinden, der Hinweis zum Hineinzoomen erscheint.
-- [ ] Ausschnitt mit sehr vielen Schiffen (z. B. Hafen Helsinki bei Zoom 5): höchstens 500 Marker, der Mengenhinweis erscheint, die Karte bleibt flüssig.
-- [ ] Außerhalb der Abdeckung (z. B. Karibik): keine Schiffe, aber ein Hinweis „In diesem Gebiet liegen keine Schiffsdaten vor“ statt einer leeren Karte ohne Erklärung.
-- [ ] Fehlerfall: Datenquelle in den Entwicklerwerkzeugen blockieren. Der Hinweis erscheint, ISS-Marker und Spur laufen weiter, und nach Aufheben der Sperre erscheinen die Schiffe wieder.
-- [ ] Schalter aus: alle Schiffsmarker verschwinden, es gehen keine Abrufe mehr an die Datenquelle (Netzwerk-Tab).
-- [ ] Neuladen: die zuletzt gewählte Einstellung ist aktiv.
-- [ ] Dark Mode und Satellitenansicht: Schiffsmarker bleiben auf Straßenkarte und auf dem Satellitenbild erkennbar.
-- [ ] Browser-Konsole zeigt keine CSP- oder Hydration-Fehler.
+- [x] Zoom unter Stufe 5: Marker verschwinden, der Hinweis zum Hineinzoomen erscheint.
+- [x] Ausschnitt mit sehr vielen Schiffen (z. B. Hafen Helsinki bei Zoom 5): höchstens 500 Marker, der Mengenhinweis erscheint, die Karte bleibt flüssig.
+- [x] Außerhalb der Abdeckung (z. B. Karibik): keine Schiffe, aber ein Hinweis „In diesem Gebiet liegen keine Schiffsdaten vor“ statt einer leeren Karte ohne Erklärung.
+- [x] Fehlerfall: Datenquelle in den Entwicklerwerkzeugen blockieren. Der Hinweis erscheint, ISS-Marker und Spur laufen weiter, und nach Aufheben der Sperre erscheinen die Schiffe wieder.
+- [x] Schalter aus: alle Schiffsmarker verschwinden, es gehen keine Abrufe mehr an die Datenquelle (Netzwerk-Tab).
+- [x] Neuladen: die zuletzt gewählte Einstellung ist aktiv.
+- [x] Dark Mode und Satellitenansicht: Schiffsmarker bleiben auf Straßenkarte und auf dem Satellitenbild erkennbar.
+- [x] Browser-Konsole zeigt keine CSP- oder Hydration-Fehler.
 - [ ] Regression: ISS-Marker bewegt sich weiter alle ca. 5 s, „Karte folgt der ISS“ funktioniert mit eingeschaltetem Schiffs-Layer.
 - [ ] Bei Proxy-Route: Aufruf mit ungültigen Parametern (Text statt Zahl, Werte außerhalb ±90°/±180°) liefert HTTP 400 und keine Anfrage an die Quelle.
 
