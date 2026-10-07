@@ -104,8 +104,41 @@ header p { margin: 4px 0 16px; color: var(--text-muted); }
   color: var(--text-muted);
 }
 
-/* Dark Mode: helle OSM-Kacheln abdunkeln, Marker und Spur bleiben unverändert. */
-:root[data-theme='dark'] .leaflet-tile-pane {
+.map-wrap { position: relative; }
+
+.view-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000; /* über den Leaflet-Ebenen */
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.view-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.map-hint {
+  position: absolute;
+  left: 10px;
+  bottom: 30px;
+  z-index: 1000;
+  max-width: calc(100% - 20px);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  color: var(--error-text);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: 8px;
+}
+
+/* Dark Mode: nur die helle OSM-Straßenkarte abdunkeln. Satellitenbilder bleiben unverändert. */
+:root[data-theme='dark'] .tiles-street {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
 }
 
