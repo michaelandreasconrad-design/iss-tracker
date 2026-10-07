@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import { MAX_SHIPS, hasValidPosition, limitBbox } from './aisCore';
 
 // Schiffsdaten: Digitraffic Marine (Fintraffic), offene AIS-Daten für Ostsee und finnische Gewässer.
 // Kein API-Schlüssel nötig. Die API verlangt gzip (Browser senden das automatisch) und bittet um
@@ -9,9 +10,11 @@ export const DIGITRAFFIC_HEADERS = { 'Digitraffic-User': 'iss-tracker' };
 
 export const SHIP_REFRESH_MS = 60000; // AIS-Daten ändern sich langsamer als die ISS; die API cacht 60 s
 export const SHIP_MIN_ZOOM = 5; // darunter wären zu viele Marker im Bild
-export const MAX_SHIPS = 500;
+export { MAX_SHIPS };
 export const SHIP_ATTRIBUTION =
   'Schiffsdaten: <a href="https://www.digitraffic.fi/">Fintraffic / digitraffic.fi</a> (CC BY 4.0)';
+export const AIS_URL = '/api/ships';
+export const AIS_ATTRIBUTION = 'Weltweit: <a href="https://aisstream.io/">AISStream.io</a>';
 
 const MOVING_KNOTS = 0.5; // darunter gilt ein Schiff als stehend
 const COURSE_NOT_AVAILABLE = 360; // AIS-Wert für „Kurs unbekannt“
@@ -126,8 +129,18 @@ export async function loadShips() {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   if (!Array.isArray(data.features)) throw new Error('Unerwartetes Format');
-  return data.features.filter((f) => {
-    const [lon, lat] = f.geometry?.coordinates ?? [];
-    return Number.isFinite(lon) && Number.isFinite(lat) && Number.isInteger(f.properties?.mmsi);
-  });
+  return data.features.filter(hasValidPosition);
+}
+
+// Schiffe eines Kartenausschnitts über den eigenen Server (AISStream). `bounds` = { south, west, north, east }.
+export async function loadAisShips(bounds, signal) {
+  const limited = limitBbox(bounds);
+  const query = new URLSearchParams(
+    Object.entries(limited).map(([key, value]) => [key, value.toFixed(4)])
+  );
+  const res = await fetch(`${AIS_URL}?${query}`, { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data.ships)) throw new Error('Unerwartetes Format');
+  return data.ships.filter(hasValidPosition);
 }
