@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+import ThemeToggle from './ThemeToggle';
 
 // Leaflet greift auf `window` zu und darf nur im Browser geladen werden.
 const IssMap = dynamic(() => import('./IssMap'), {
@@ -78,9 +79,12 @@ export default function Home() {
 
   return (
     <main>
-      <header>
-        <h1>ISS-Live-Tracker</h1>
-        <p>Aktuelle Position der Internationalen Raumstation</p>
+      <header className="page-header">
+        <div>
+          <h1>ISS-Live-Tracker</h1>
+          <p>Aktuelle Position der Internationalen Raumstation</p>
+        </div>
+        <ThemeToggle />
       </header>
 
       {error && (
