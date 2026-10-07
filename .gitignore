@@ -6,3 +6,6 @@ next-env.d.ts
 .vercel
 .env
 .env*.local
+
+# Tool-Aufruf-Log des Hooks
+logs/
