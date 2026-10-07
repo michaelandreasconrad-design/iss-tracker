@@ -23,6 +23,7 @@ const issIcon = L.divIcon({
 
 const MAX_TRAIL_POINTS = 120; // ca. 10 Minuten bei 5 s Intervall
 const VIEW_STORAGE_KEY = 'mapView';
+const INITIAL_VIEW = { center: [0, 0], zoom: 2 }; // Startansicht, bis die erste ISS-Position da ist
 
 // Satellitenbilder: Esri World Imagery (ohne API-Schlüssel, Quellenangabe Pflicht).
 // Echte Bilddaten gibt es bis Zoomstufe 17, darüber werden sie hochskaliert statt grau angezeigt.
@@ -75,7 +76,10 @@ export default function IssMap({ position, follow, showShips }) {
   const [satelliteError, setSatelliteError] = useState(false);
 
   useEffect(() => {
-    const map = L.map(containerRef.current, { worldCopyJump: true }).setView([0, 0], 2);
+    const map = L.map(containerRef.current, { worldCopyJump: true }).setView(
+      INITIAL_VIEW.center,
+      INITIAL_VIEW.zoom
+    );
 
     // Eigene Klasse an den Straßenkarten-Kacheln: Nur sie werden im Dark Mode abgedunkelt.
     streetLayerRef.current = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -131,7 +135,14 @@ export default function IssMap({ position, follow, showShips }) {
     if (!map || !position) return;
     if (!markerRef.current) {
       markerRef.current = L.marker(position, { icon: issIcon, zIndexOffset: 1000 }).addTo(map);
-      map.setView(position, 3);
+      // Nur zentrieren, solange die Karte unberührt auf der Startansicht steht. Trifft die erste Position
+      // spät ein, darf sie einen bereits gewählten Ausschnitt nicht überschreiben.
+      const center = map.getCenter();
+      const untouched =
+        map.getZoom() === INITIAL_VIEW.zoom &&
+        Math.abs(center.lat - INITIAL_VIEW.center[0]) < 1e-6 &&
+        Math.abs(center.lng - INITIAL_VIEW.center[1]) < 1e-6;
+      if (untouched) map.setView(position, 3);
     } else {
       markerRef.current.setLatLng(position);
     }

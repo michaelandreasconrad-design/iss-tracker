@@ -22,7 +22,8 @@ Die Karte zeigt bisher nur die ISS. Nutzer möchten zusätzlich Schiffe live auf
 - [x] Es stehen keine API-Schlüssel oder Secrets im Code oder im Repo.
 - [ ] ISS-Marker, Spur, „Karte folgt der ISS“, Astronautenliste und Theme-/Ansichtsumschalter laufen unverändert.
 - [x] Der StackHawk-Neuscan (`hawk rescan`) zeigt keine neuen Befunde, auch für eine eventuelle neue API-Route.
-- [ ] Tests laufen (siehe „Tests“), Änderung ist auf Vercel deployt und dort geprüft.
+- [ ] Tests laufen (siehe „Tests“).
+- [x] Änderung ist auf Vercel deployt und dort geprüft.
 
 ## Betroffene Bereiche & Technik
 - `app/IssMap.js`: Layer für Schiffsmarker (`L.layerGroup`), Abruf passend zum Kartenausschnitt (`moveend`/`zoomend`), Popup, Zoom- und Mengenbegrenzung. Marker per `L.divIcon` mit gedrehtem Symbol, damit keine Bilddateien nötig sind.
